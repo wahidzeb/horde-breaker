@@ -366,6 +366,15 @@ body:not(.ads-on) .adslot{display:none!important}
 
 <div id="toast"></div>
 <script>
+/* GA4 custom events (Games by Zaib). Safe: never throws, light (no per-frame calls, dedupe + per-page cap). */
+var ZT_N = 0, ZT_K = '', ZT_KT = 0, ZT_T = 0, ZT_S = 0, ZT_H = 0;
+function zt(n, p) { try { var k = n + JSON.stringify(p || 0), t = Date.now(); if (ZT_N > 150 || (k === ZT_K && t - ZT_KT < 500)) return; ZT_N++; ZT_K = k; ZT_KT = t; window.gtag && gtag('event', n, Object.assign({ game_id: 'horde-breaker' }, p)); } catch (e) {} }
+function ztPlay(on) { try { var t = Date.now(); if (ZT_S) { ZT_T += (t - ZT_S) / 1e3; ZT_S = 0; } if (on) ZT_S = t; } catch (e) {} }
+function ztPing(r) { try { ztPlay(false); if (ZT_T >= 1) zt('play_time', { play_time: Math.round(ZT_T), reason: r }); ZT_T = 0; } catch (e) {} }
+try {
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { ZT_H = !!ZT_S; ztPing('page_hide'); } else if (ZT_H) { ZT_H = 0; ztPlay(true); } });
+  document.addEventListener('click', function (e) { try { var a = e.target && e.target.closest && e.target.closest('a[href]'); if (!a) return; var u = new URL(a.href, location.href); if (!/^https?:$/.test(u.protocol)) return; if (u.host === location.host || /(^|\.)zaibgames\.com$/.test(u.host)) { if (u.pathname.indexOf('/horde-breaker/') !== 0) zt('more_games_click', { link_url: u.href }); } else zt('outbound_click', { link_url: u.href, link_domain: u.host, outbound: true }); } catch (err) {} }, true);
+} catch (e) {}
 'use strict';
 // ================= Horde Breaker by Zaib — core =================
 const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
@@ -2214,6 +2223,7 @@ function beginPlay() {
   parts.length = 0; texts.length = 0; resetInput();
   $('#hud').classList.remove('hidden'); showScreen(null);
   const r = G.run;
+  zt('game_start', { mode: r.mode, level: r.mode === 'level' ? r.lvl + 1 : 0, map: r.map.def.name }); if (r.mode === 'level') zt('level_start', { level: r.lvl + 1, level_name: r.def.name }); ztPlay(true);
   setSong(r.mode === 'level' && r.def.mode === 'boss' ? MAPS[r.map.mi].song : MAPS[r.map.mi].song);
   setAmbient(r.map.def.id === 'city' ? 0.06 : 0.025, r.map.def.id === 'city' ? 2500 : 400);
   applyVolumes();
@@ -2857,6 +2867,13 @@ function endRun(win) {
   }
   res.total = res.coins + res.bonus;
   save.coins += res.total; save.tot.coins += res.total;
+  const zl = run.mode === 'level' ? run.lvl + 1 : 0;
+  if (run.mode === 'level') zt('level_end', { level: zl, success: !!win, score: run.score, kills: run.kills });
+  if (!win) zt('game_over', { score: run.score, level: zl, mode: run.mode, wave: run.wave, kills: run.kills });
+  if (run.score > 0 && (res.newBest || (run.mode === 'level' && win && run.score >= save.lvBest[run.lvl]))) zt('post_score', { score: run.score, level: zl, mode: run.mode, wave: run.wave });
+  if (res.total > 0) zt('earn_virtual_currency', { virtual_currency_name: 'coins', value: res.total, item_name: run.mode + '_run' });
+  if (res.unlockedNext) zt('unlock_achievement', { achievement_id: 'level_' + (zl + 1) });
+  ztPing(win ? 'level_clear' : 'game_over');
   writeSave();
   showResults(res);
 }
@@ -3650,7 +3667,7 @@ function buildArmory() {
       const icon = { hp: '❤', armor: '🛡', speed: '👟', nade: '💣', turret: '🔧', scav: '🧲' }[g.id];
       d.innerHTML = `<div class="pv" style="display:flex;align-items:center;justify-content:center;font-size:30px;width:60px">${icon}</div><div class="info"><div class="ttl">${g.name}</div><div class="desc">${g.desc}</div><div class="pips">${Array.from({ length: g.max }, (_, k) => `<i class="${k < lv ? 'on' : ''}"></i>`).join('')}</div></div><div class="cbtns"></div>`;
       const cb = d.querySelector('.cbtns');
-      if (lv < g.max) { const c = g.cost[lv]; const b = btn(`<span class="col">Upgrade<span class="sub">◉ ${fmt(c)}</span></span>`, 'amber small', save.coins < c); b.onclick = () => { if (save.coins < c) return SFX.denied(); save.coins -= c; save.upg[g.id]++; writeSave(); SFX.buy(); toast(g.name + ' upgraded!'); buildArmory(); refresh(''); }; cb.appendChild(b); }
+      if (lv < g.max) { const c = g.cost[lv]; const b = btn(`<span class="col">Upgrade<span class="sub">◉ ${fmt(c)}</span></span>`, 'amber small', save.coins < c); b.onclick = () => { if (save.coins < c) return SFX.denied(); save.coins -= c; save.upg[g.id]++; zt('spend_virtual_currency', { virtual_currency_name: 'coins', value: c, item_name: g.name + ' ' + save.upg[g.id] }); writeSave(); SFX.buy(); toast(g.name + ' upgraded!'); buildArmory(); refresh(''); }; cb.appendChild(b); }
       else cb.appendChild(btn('Maxed', 'dark small', true));
       list.appendChild(d);
     });
@@ -3665,9 +3682,9 @@ function buildSpecials() {
     const cd = Math.round(sp.cd * (1 - 0.06 * u));
     d.innerHTML = `<canvas class="spv"></canvas><div class="info"><div class="ttl">${sp.name} ${own ? (eq ? '<span class="pill">Equipped</span>' : '') : '<span class="pill g">Locked</span>'}</div><div class="desc">${sp.desc}</div><div class="desc" style="color:#cfd8c4">Recharge ${cd}s · Upgrades: ${sp.up}</div><div class="pips">${[0, 1, 2, 3, 4].map(k => `<i class="${k < u ? 'on' : ''}"></i>`).join('')}</div></div><div class="cbtns"></div>`;
     const cb = d.querySelector('.cbtns');
-    if (!own) { const b = btn(`<span class="col">Unlock<span class="sub">◉ ${fmt(sp.price)}</span></span>`, 'green small', save.coins < sp.price); b.onclick = () => { if (save.coins < sp.price) return SFX.denied(); save.coins -= sp.price; save.spOwn[i] = true; save.spEq = i; writeSave(); SFX.buy(); toast(sp.name + ' unlocked & equipped!'); buildArmory(); }; cb.appendChild(b); }
+    if (!own) { const b = btn(`<span class="col">Unlock<span class="sub">◉ ${fmt(sp.price)}</span></span>`, 'green small', save.coins < sp.price); b.onclick = () => { if (save.coins < sp.price) return SFX.denied(); save.coins -= sp.price; save.spOwn[i] = true; zt('spend_virtual_currency', { virtual_currency_name: 'coins', value: sp.price, item_name: sp.name }); save.spEq = i; writeSave(); SFX.buy(); toast(sp.name + ' unlocked & equipped!'); buildArmory(); }; cb.appendChild(b); }
     else {
-      if (u < 5) { const c = SP_COST[u]; const b = btn(`<span class="col">Upgrade<span class="sub">◉ ${fmt(c)}</span></span>`, 'amber small', save.coins < c); b.onclick = () => { if (save.coins < c) return SFX.denied(); save.coins -= c; save.spUp[i]++; writeSave(); SFX.buy(); toast(sp.name + ' → level ' + (save.spUp[i] + 1)); buildArmory(); }; cb.appendChild(b); }
+      if (u < 5) { const c = SP_COST[u]; const b = btn(`<span class="col">Upgrade<span class="sub">◉ ${fmt(c)}</span></span>`, 'amber small', save.coins < c); b.onclick = () => { if (save.coins < c) return SFX.denied(); save.coins -= c; save.spUp[i]++; zt('spend_virtual_currency', { virtual_currency_name: 'coins', value: c, item_name: sp.name + ' ' + (save.spUp[i] + 1) }); writeSave(); SFX.buy(); toast(sp.name + ' → level ' + (save.spUp[i] + 1)); buildArmory(); }; cb.appendChild(b); }
       else cb.appendChild(btn('Maxed', 'dark small', true));
       if (!eq) { const b = btn('Equip', 'blue small'); b.onclick = () => { save.spEq = i; writeSave(); SFX.click(); buildArmory(); }; cb.appendChild(b); }
     }
@@ -3679,11 +3696,11 @@ function buildSpecials() {
 function btn(html, cls, dis) { const b = document.createElement('button'); b.className = 'btn ' + cls; b.innerHTML = html; if (dis) b.disabled = true; return b; }
 function buyWeapon(i) {
   const w = WEAPONS[i]; if (save.coins < w.price) { SFX.denied(); return; }
-  save.coins -= w.price; save.wown[i] = true;
+  save.coins -= w.price; save.wown[i] = true; zt('spend_virtual_currency', { virtual_currency_name: 'coins', value: w.price, item_name: w.name });
   const e = save.loadout.indexOf(-1); if (e >= 0) save.loadout[e] = i; else save.loadout[1] = i;
   writeSave(); SFX.buy(); toast(w.name + ' unlocked & equipped!'); buildArmory();
 }
-function upgradeWeapon(i) { const c = upCost(i); if (save.coins < c || save.wup[i] >= 5) { SFX.denied(); return; } save.coins -= c; save.wup[i]++; writeSave(); SFX.buy(); toast(WEAPONS[i].name + ' → level ' + (save.wup[i] + 1)); buildArmory(); }
+function upgradeWeapon(i) { const c = upCost(i); if (save.coins < c || save.wup[i] >= 5) { SFX.denied(); return; } save.coins -= c; save.wup[i]++; zt('spend_virtual_currency', { virtual_currency_name: 'coins', value: c, item_name: WEAPONS[i].name + ' ' + (save.wup[i] + 1) }); writeSave(); SFX.buy(); toast(WEAPONS[i].name + ' → level ' + (save.wup[i] + 1)); buildArmory(); }
 function toggleEquip(i) {
   const k = save.loadout.indexOf(i);
   if (k >= 0) save.loadout[k] = -1;
@@ -3802,8 +3819,8 @@ function wire() {
   $('#bNext').onclick = () => { SFX.click(); screenStack = []; if (lastRes.lvl < LEVELS.length - 1) { startDemo(); openBrief(lastRes.lvl + 1); screenStack = ['title', 'levels']; } else startEndless(); };
   $('#bArmR').onclick = () => { SFX.click(); showScreen('armory', true); };
   $('#bMenu').onclick = () => { SFX.click(); quitToMenu(); screenStack = ['title']; if (lastRes && lastRes.mode === 'level') showScreen('levels'); };
-  $$('.tog').forEach(t => t.onclick = () => { const k = t.dataset.set; save.settings[k] = !save.settings[k]; writeSave(); syncSettings(); applyVolumes(); SFX.click(); if (k === 'vibe' && save.settings.vibe) vibrate(30); if (k === 'lefty') layoutControls(); });
-  $$('.seg[data-seg] button').forEach(b => b.onclick = () => { const k = b.parentNode.dataset.seg; save.settings[k] = +b.dataset.v; writeSave(); syncSettings(); SFX.click(); if (k === 'q') { perf.low = false; resize(); } if (k === 'aim') layoutControls(); });
+  $$('.tog').forEach(t => t.onclick = () => { const k = t.dataset.set; save.settings[k] = !save.settings[k]; zt('settings_change', { setting: k, value: String(save.settings[k]) }); writeSave(); syncSettings(); applyVolumes(); SFX.click(); if (k === 'vibe' && save.settings.vibe) vibrate(30); if (k === 'lefty') layoutControls(); });
+  $$('.seg[data-seg] button').forEach(b => b.onclick = () => { const k = b.parentNode.dataset.seg; save.settings[k] = +b.dataset.v; zt('settings_change', { setting: k, value: String(b.dataset.v) }); writeSave(); syncSettings(); SFX.click(); if (k === 'q') { perf.low = false; resize(); } if (k === 'aim') layoutControls(); });
   $('#bReset').onclick = () => {
     const b = $('#bReset');
     if (b.dataset.arm !== '1') { b.dataset.arm = '1'; b.textContent = 'Tap again to erase everything'; SFX.warn(); setTimeout(() => { if (b.dataset.arm === '1') syncSettings(); }, 3500); return; }
