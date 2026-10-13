@@ -1,0 +1,42 @@
+{
+  "id": "/horde-breaker/",
+  "name": "Horde Breaker",
+  "short_name": "Horde Breaker",
+  "description": "Horde Breaker by Zaib - a top-down twin-stick zombie survival shooter. Five maps, 20 levels, endless mode, bosses and an armory full of upgrades.",
+  "lang": "en",
+  "start_url": "/horde-breaker/?source=pwa",
+  "scope": "/horde-breaker/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#11150f",
+  "background_color": "#11150f",
+  "categories": [
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "/horde-breaker/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/horde-breaker/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/horde-breaker/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/horde-breaker/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
